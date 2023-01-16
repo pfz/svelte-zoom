@@ -1,63 +1,8 @@
-<style>
-  .c-svelteZoom {
-    width: 100%;
-    height: 100%;
-    position: absolute;
-    transform-origin: 0 0;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    -moz-backface-visibility: hidden;
-    -o-backface-visibility: hidden;
-    -ms-backface-visibility: hidden;
-    -webkit-user-drag: none;
-    -moz-user-drag: none;
-    -o-user-drag: none;
-    user-drag: none;
-    touch-action: none;
-  }
-
-  .c-svelteZoom--contain {
-    object-fit: contain;
-  }
-
-  .c-svelteZoom--no-contain {
-    object-fit: contain;
-  }
-
-  .c-svelteZoom--transition {
-    transition: transform 0.2s;
-  }
-
-  .c-svelteZoom--visible {
-    visibility: visible;
-  }
-
-  .c-svelteZoom--hidden {
-    visibility: hidden;
-  }
-  
-  .c-svelteZoom--willChange{
-    will-change: transform;
-  }
-</style>
-
-<img
-  {alt}
-  class="c-svelteZoom"
-  class:c-svelteZoom--contain={contain}
-  class:c-svelteZoom--no-contain={!contain}
-  class:c-svelteZoom--transition={smooth}
-  class:c-svelteZoom--visible={contain}
-  class:c-svelteZoom--hidden={contain === null}
-  class:c-svelteZoom--willChange={willChange}
-  bind:this={img}
-  on:mousedown={mousedown}
-  on:touchstart={touchstart}
-  on:load={onLoad}
-  {...$$props} />
-
 <script>
-  export let alt
+  export let src
+  export let alt = ""
+  export let maxScale = 2
+
   import Matrix from "./matrix"
   import MultiTouchVelocity from "./velocity"
 
@@ -65,6 +10,8 @@
 
   import { onMount } from "svelte"
 
+  let error = false
+  let loaded = false
   let smooth = true
   let touchScreen = false
 
@@ -79,7 +26,7 @@
 
   let matrix
   let contain = null
-  let willChange = true;
+  let willChange = true
 
   let velocity = new MultiTouchVelocity()
 
@@ -99,7 +46,7 @@
     originX: 0,
     originY: 0,
     value: 1,
-    max: 1,
+    max: maxScale,
   }
 
   function fireDown(x, y) {
@@ -108,8 +55,8 @@
 
     matrix.x = matrix.vtm.e
     matrix.y = matrix.vtm.f
-    
-    willChange = true;
+
+    willChange = true
   }
 
   function fireMove(x, y) {
@@ -131,7 +78,7 @@
     scale.scaling = false
     scale.lastHypo = 0
     smooth = true
-    willChange = false;
+    willChange = false
   }
 
   function fireScale(touchA, touchB) {
@@ -173,7 +120,7 @@
     img.style.transform = `translate(${mat.e}px, ${mat.f}px) scale(${mat.d})`
   }
 
-  function fireScaleMove(touchA, touchB, e) {
+  function fireScaleMove(touchA, touchB) {
     const hypo = getDistance(touchA, touchB)
 
     let f = hypo / scale.lastHypo
@@ -234,6 +181,7 @@
 
   function onWheel(e) {
     e.preventDefault()
+    if (!loaded) return
     const dir = e.deltaY < 0 ? 1 : -1
 
     const xFactor = 1 + 0.1 * dir
@@ -252,12 +200,20 @@
     scale.value = mat.d
   }
 
+  function onError() {
+    error = true
+  }
   function onLoad() {
+    loaded = true
     const { naturalWidth, naturalHeight } = img
 
     contain = naturalWidth > window.innerWidth || naturalHeight > window.innerHeight
 
-    scale.max = naturalWidth > naturalHeight ? Math.max(naturalWidth / window.innerWidth, 1) : Math.max(naturalHeight / window.innerHeight, 1)
+    scale.max =
+      maxScale *
+      (naturalWidth > naturalHeight
+        ? Math.max(naturalWidth / window.innerWidth, 1)
+        : Math.max(naturalHeight / window.innerHeight, 1))
     ratio = calculateAspectRatioFit(naturalWidth, naturalHeight, window.innerWidth, window.innerHeight)
   }
 
@@ -267,7 +223,7 @@
     window.addEventListener("resize", onResize)
     return () => {
       window.removeEventListener("wheel", onWheel)
-      window.removeEventListener("resize", onResize)      
+      window.removeEventListener("resize", onResize)
     }
   })
 
@@ -286,7 +242,7 @@
       velocity.down(touchA, touchB)
     } else {
       const { pageX, pageY } = touchA
-      var now = new Date().getTime()
+      const now = new Date().getTime()
       if (now - lastTap.time < 250 && Math.hypot(lastTap.x - pageX, lastTap.y - pageY) <= 20) {
         smooth = true
         fireTapScale(pageX, pageY)
@@ -316,7 +272,7 @@
     }
   }
 
-  function onTouchEnd(e) {
+  function onTouchEnd() {
     fireUp()
     window.removeEventListener("touchmove", onTouchMove)
     window.removeEventListener("touchend", onTouchEnd)
@@ -345,3 +301,70 @@
   const mousedown = onMouseDown
   const touchstart = onTouchStart
 </script>
+
+<img
+  {alt}
+  {src}
+  class="c-svelteZoom"
+  class:c-svelteZoom--contain={contain}
+  class:c-svelteZoom--no-contain={!contain}
+  class:c-svelteZoom--transition={smooth}
+  class:c-svelteZoom--visible={contain}
+  class:c-svelteZoom--hidden={contain === null}
+  class:c-svelteZoom--willChange={willChange}
+  bind:this={img}
+  on:mousedown={mousedown}
+  on:touchstart={touchstart}
+  on:load={onLoad}
+  on:error={onError}
+  {...$$props}
+/>
+
+{#if !loaded}
+  <div class="tw-absolute tw-inset-0 tw-flex tw-flex-grow tw-items-center tw-justify-center">
+    <slot {error}><span class="tw-text-white">...</span></slot>
+  </div>
+{/if}
+
+<style>
+  .c-svelteZoom {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    transform-origin: 0 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    -moz-backface-visibility: hidden;
+    -o-backface-visibility: hidden;
+    -ms-backface-visibility: hidden;
+    -webkit-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    user-drag: none;
+    touch-action: none;
+  }
+
+  .c-svelteZoom--contain {
+    object-fit: contain;
+  }
+
+  .c-svelteZoom--no-contain {
+    object-fit: contain;
+  }
+
+  .c-svelteZoom--transition {
+    transition: transform 0.2s;
+  }
+
+  .c-svelteZoom--visible {
+    visibility: visible;
+  }
+
+  .c-svelteZoom--hidden {
+    visibility: hidden;
+  }
+
+  .c-svelteZoom--willChange {
+    will-change: transform;
+  }
+</style>
