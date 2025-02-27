@@ -1,40 +1,44 @@
-<script>
-  export let src
-  export let alt = ""
-  export let maxScale = 2
+<script lang="ts">
+  import { onMount, type Snippet } from "svelte";
+  import Matrix from "./matrix";
+  import MultiTouchVelocity from "./velocity";
+  import { calculateAspectRatioFit, getDistance } from "./other";
 
-  import Matrix from "./matrix"
-  import MultiTouchVelocity from "./velocity"
+  interface Props {
+    src: any;
+    alt?: string;
+    maxScale?: number;
+    children?: Snippet<[any]>;
+  }
 
-  import { calculateAspectRatioFit, getDistance } from "./other"
+  let { src, alt = "", maxScale = 2, children, ...rest }: Props = $props();
 
-  import { onMount } from "svelte"
-
-  let error = false
-  let loaded = false
-  let smooth = true
-  let touchScreen = false
+  let error = $state(false);
+  let loaded = $state(false);
+  let smooth = $state(true);
+  let touchScreen = false;
 
   let xY = {
     initX: 0,
     initY: 0,
     newX: 0,
-    newY: 0,
-  }
+    newY: 0
+  };
 
-  let ratio, img
+  let ratio,
+    img = $state();
 
-  let matrix
-  let contain = null
-  let willChange = true
+  let matrix;
+  let contain = $state(null);
+  let willChange = $state(true);
 
-  let velocity = new MultiTouchVelocity()
+  let velocity = new MultiTouchVelocity();
 
   let lastTap = {
     time: 0,
     x: 0,
-    y: 0,
-  }
+    y: 0
+  };
 
   let scale = {
     scaling: false,
@@ -46,283 +50,284 @@
     originX: 0,
     originY: 0,
     value: 1,
-    max: maxScale,
-  }
+    max: maxScale
+  };
 
   function fireDown(x, y) {
-    xY.initX = x
-    xY.initY = y
+    xY.initX = x;
+    xY.initY = y;
 
-    matrix.x = matrix.vtm.e
-    matrix.y = matrix.vtm.f
+    matrix.x = matrix.vtm.e;
+    matrix.y = matrix.vtm.f;
 
-    willChange = true
+    willChange = true;
   }
 
   function fireMove(x, y) {
-    if (scale.scaling) return
-    let in_x = (window.innerWidth - ratio.width * matrix.vtm.a) / 2
-    let in_y = (window.innerHeight - ratio.height * matrix.vtm.a) / 2
+    if (scale.scaling) return;
+    let in_x = (window.innerWidth - ratio.width * matrix.vtm.a) / 2;
+    let in_y = (window.innerHeight - ratio.height * matrix.vtm.a) / 2;
 
-    xY.newX = xY.initX - x
-    xY.newY = xY.initY - y
-    const mat = matrix.move(in_x >= 0 ? 0 : xY.newX, in_y >= 0 ? 0 : xY.newY, in_x, in_y, ratio)
+    xY.newX = xY.initX - x;
+    xY.newY = xY.initY - y;
+    const mat = matrix.move(in_x >= 0 ? 0 : xY.newX, in_y >= 0 ? 0 : xY.newY, in_x, in_y, ratio);
 
-    img.style.transform = `matrix(${mat.a},${mat.b},${mat.c},${mat.d},${mat.e}, ${mat.f})`
+    img.style.transform = `matrix(${mat.a},${mat.b},${mat.c},${mat.d},${mat.e}, ${mat.f})`;
   }
 
   function fireUp() {
-    matrix.x -= xY.newX
-    matrix.y -= xY.newY
+    matrix.x -= xY.newX;
+    matrix.y -= xY.newY;
 
-    scale.scaling = false
-    scale.lastHypo = 0
-    smooth = true
-    willChange = false
+    scale.scaling = false;
+    scale.lastHypo = 0;
+    smooth = true;
+    willChange = false;
   }
 
   function fireScale(touchA, touchB) {
-    const xTouch = [Math.min(touchA.pageX, touchB.pageX), Math.max(touchA.pageX, touchB.pageX)]
+    const xTouch = [Math.min(touchA.pageX, touchB.pageX), Math.max(touchA.pageX, touchB.pageX)];
 
-    const yTouch = [Math.min(touchA.pageY, touchB.pageY), Math.max(touchA.pageY, touchB.pageY)]
+    const yTouch = [Math.min(touchA.pageY, touchB.pageY), Math.max(touchA.pageY, touchB.pageY)];
 
-    const W = xTouch[1] - xTouch[0]
-    const centerX = W / 2 + xTouch[0]
+    const W = xTouch[1] - xTouch[0];
+    const centerX = W / 2 + xTouch[0];
 
-    const H = yTouch[1] - yTouch[0]
-    const centerY = H / 2 + yTouch[0]
+    const H = yTouch[1] - yTouch[0];
+    const centerY = H / 2 + yTouch[0];
 
-    scale.originX = centerX
-    scale.originY = centerY
-    scale.lastHypo = Math.trunc(getDistance(touchA, touchB))
-    smooth = false
+    scale.originX = centerX;
+    scale.originY = centerY;
+    scale.lastHypo = Math.trunc(getDistance(touchA, touchB));
+    smooth = false;
   }
 
   function fireTapScale(x, y) {
-    let scaleVtm = matrix.vtm.a
-    let scale_value = scaleVtm > 1 ? scaleVtm - 1 : scale.max / 2.5
-    let scale_factor = scaleVtm > 1 ? -1 : 1
+    let scaleVtm = matrix.vtm.a;
+    let scale_value = scaleVtm > 1 ? scaleVtm - 1 : scale.max / 2.5;
+    let scale_factor = scaleVtm > 1 ? -1 : 1;
 
-    const xFactor = 1 + scale_value * scale_factor
-    const yFactor = (xFactor * window.innerHeight) / window.innerWidth
+    const xFactor = 1 + scale_value * scale_factor;
+    const yFactor = (xFactor * window.innerHeight) / window.innerWidth;
 
-    let in_x = (window.innerWidth - ratio.width * Math.max(xFactor * scaleVtm, 1)) / 2
-    let in_y = (window.innerHeight - ratio.height * Math.max(xFactor * scaleVtm, 1)) / 2
+    let in_x = (window.innerWidth - ratio.width * Math.max(xFactor * scaleVtm, 1)) / 2;
+    let in_y = (window.innerHeight - ratio.height * Math.max(xFactor * scaleVtm, 1)) / 2;
 
     const origin = {
       x: in_x > 0 ? window.innerWidth / 2 : x,
-      y: in_y > 0 ? window.innerHeight / 2 : y,
-    }
+      y: in_y > 0 ? window.innerHeight / 2 : y
+    };
 
-    const mat = matrix.scale(xFactor, yFactor, origin, in_x, in_y, ratio, scale.max, scale.value * xFactor, scale_factor)
+    const mat = matrix.scale(xFactor, yFactor, origin, in_x, in_y, ratio, scale.max, scale.value * xFactor, scale_factor);
 
-    scale.value = mat.d
-    img.style.transform = `translate(${mat.e}px, ${mat.f}px) scale(${mat.d})`
+    scale.value = mat.d;
+    img.style.transform = `translate(${mat.e}px, ${mat.f}px) scale(${mat.d})`;
   }
 
   function fireScaleMove(touchA, touchB) {
-    const hypo = getDistance(touchA, touchB)
+    const hypo = getDistance(touchA, touchB);
 
-    let f = hypo / scale.lastHypo
+    let f = hypo / scale.lastHypo;
 
-    f = f >= 1 ? 1 : -1
+    f = f >= 1 ? 1 : -1;
 
-    const ff = velocity.getVelocity(touchA, touchB) || 1
+    const ff = velocity.getVelocity(touchA, touchB) || 1;
 
-    const xFactor = 1 + 0.1 * ff * f
+    const xFactor = 1 + 0.1 * ff * f;
 
-    const yFactor = (xFactor * window.innerHeight) / window.innerWidth
+    const yFactor = (xFactor * window.innerHeight) / window.innerWidth;
 
-    let in_x = (window.innerWidth - ratio.width * matrix.vtm.a) / 2
-    let in_y = (window.innerHeight - ratio.height * matrix.vtm.a) / 2
+    let in_x = (window.innerWidth - ratio.width * matrix.vtm.a) / 2;
+    let in_y = (window.innerHeight - ratio.height * matrix.vtm.a) / 2;
 
     const origin = {
       x: in_x > 0 ? window.innerWidth / 2 : scale.originX,
-      y: in_y > 0 ? window.innerHeight / 2 : scale.originY,
-    }
+      y: in_y > 0 ? window.innerHeight / 2 : scale.originY
+    };
 
-    const mat = matrix.scale(xFactor, yFactor, origin, in_x, in_y, ratio, scale.max, scale.value * xFactor, f)
+    const mat = matrix.scale(xFactor, yFactor, origin, in_x, in_y, ratio, scale.max, scale.value * xFactor, f);
 
-    img.style.transform = `translate(${mat.e}px, ${mat.f}px) scale(${mat.d})`
+    img.style.transform = `translate(${mat.e}px, ${mat.f}px) scale(${mat.d})`;
 
-    scale.value = mat.d
+    scale.value = mat.d;
 
-    scale.lastHypo = hypo
-    scale.scaling = true
+    scale.lastHypo = hypo;
+    scale.scaling = true;
   }
 
   function fireManualZoom(dir) {
-    const xFactor = 1 + 0.2 * dir
-    const yFactor = (xFactor * window.innerHeight) / window.innerWidth
+    const xFactor = 1 + 0.2 * dir;
+    const yFactor = (xFactor * window.innerHeight) / window.innerWidth;
 
-    let in_x = (window.innerWidth - ratio.width * matrix.vtm.a) / 2
-    let in_y = (window.innerHeight - ratio.height * matrix.vtm.a) / 2
+    let in_x = (window.innerWidth - ratio.width * matrix.vtm.a) / 2;
+    let in_y = (window.innerHeight - ratio.height * matrix.vtm.a) / 2;
 
     const origin = {
       x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    }
+      y: window.innerHeight / 2
+    };
 
-    const mat = matrix.scale(xFactor, yFactor, origin, in_x, in_y, ratio, scale.max, scale.value * xFactor, dir)
-    img.style.transform = `translate(${mat.e}px,${mat.f}px) scale(${mat.d})`
-    scale.value = mat.d
+    const mat = matrix.scale(xFactor, yFactor, origin, in_x, in_y, ratio, scale.max, scale.value * xFactor, dir);
+    img.style.transform = `translate(${mat.e}px,${mat.f}px) scale(${mat.d})`;
+    scale.value = mat.d;
   }
 
-  export const zoomIn = () => fireManualZoom(1)
+  export const zoomIn = () => fireManualZoom(1);
 
-  export const zoomOut = () => fireManualZoom(-1)
+  export const zoomOut = () => fireManualZoom(-1);
 
   function onResize() {
-    onLoad()
-    fireDown(0, 0)
-    fireMove(0, 0)
-    fireUp()
+    onLoad();
+    fireDown(0, 0);
+    fireMove(0, 0);
+    fireUp();
   }
 
   function onWheel(e) {
-    e.preventDefault()
-    if (!loaded) return
-    const dir = e.deltaY < 0 ? 1 : -1
+    e.preventDefault();
+    if (!loaded) return;
+    const dir = e.deltaY < 0 ? 1 : -1;
 
-    const xFactor = 1 + 0.1 * dir
-    const yFactor = (xFactor * window.innerHeight) / window.innerWidth
+    const xFactor = 1 + 0.1 * dir;
+    const yFactor = (xFactor * window.innerHeight) / window.innerWidth;
 
-    let in_x = (window.innerWidth - ratio.width * matrix.vtm.a) / 2
-    let in_y = (window.innerHeight - ratio.height * matrix.vtm.a) / 2
+    let in_x = (window.innerWidth - ratio.width * matrix.vtm.a) / 2;
+    let in_y = (window.innerHeight - ratio.height * matrix.vtm.a) / 2;
 
     const origin = {
       x: in_x > 0 ? window.innerWidth / 2 : e.pageX,
-      y: in_y > 0 ? window.innerHeight / 2 : e.pageY,
-    }
+      y: in_y > 0 ? window.innerHeight / 2 : e.pageY
+    };
 
-    const mat = matrix.scale(xFactor, yFactor, origin, in_x, in_y, ratio, scale.max, scale.value * xFactor, dir)
-    img.style.transform = `translate(${mat.e}px,${mat.f}px) scale(${mat.d})`
-    scale.value = mat.d
+    const mat = matrix.scale(xFactor, yFactor, origin, in_x, in_y, ratio, scale.max, scale.value * xFactor, dir);
+    img.style.transform = `translate(${mat.e}px,${mat.f}px) scale(${mat.d})`;
+    scale.value = mat.d;
   }
 
   function onError() {
-    error = true
+    error = true;
   }
-  function onLoad() {
-    loaded = true
-    const { naturalWidth, naturalHeight } = img
 
-    contain = naturalWidth > window.innerWidth || naturalHeight > window.innerHeight
+  function onLoad() {
+    loaded = true;
+    const { naturalWidth, naturalHeight } = img;
+
+    contain = naturalWidth > window.innerWidth || naturalHeight > window.innerHeight;
 
     scale.max =
       maxScale *
       (naturalWidth > naturalHeight
         ? Math.max(naturalWidth / window.innerWidth, 1)
-        : Math.max(naturalHeight / window.innerHeight, 1))
-    ratio = calculateAspectRatioFit(naturalWidth, naturalHeight, window.innerWidth, window.innerHeight)
+        : Math.max(naturalHeight / window.innerHeight, 1));
+    ratio = calculateAspectRatioFit(naturalWidth, naturalHeight, window.innerWidth, window.innerHeight);
   }
 
   onMount(() => {
-    matrix = new Matrix()
-    window.addEventListener("wheel", onWheel, { passive: false })
-    window.addEventListener("resize", onResize)
+    matrix = new Matrix();
+    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("resize", onResize);
     return () => {
-      window.removeEventListener("wheel", onWheel)
-      window.removeEventListener("resize", onResize)
-    }
-  })
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("resize", onResize);
+    };
+  });
 
   function onTouchStart(e) {
-    touchScreen = true
-    willChange = true
-    const isMultiTouch = e.touches.length === 2
-    const [touchA, touchB] = e.touches
+    touchScreen = true;
+    willChange = true;
+    const isMultiTouch = e.touches.length === 2;
+    const [touchA, touchB] = e.touches;
 
-    scale.scaling = isMultiTouch
+    scale.scaling = isMultiTouch;
 
-    smooth = false
+    smooth = false;
     if (isMultiTouch) {
-      fireScale(touchA, touchB)
+      fireScale(touchA, touchB);
 
-      velocity.down(touchA, touchB)
+      velocity.down(touchA, touchB);
     } else {
-      const { pageX, pageY } = touchA
-      const now = new Date().getTime()
+      const { pageX, pageY } = touchA;
+      const now = new Date().getTime();
       if (now - lastTap.time < 250 && Math.hypot(lastTap.x - pageX, lastTap.y - pageY) <= 20) {
-        smooth = true
-        fireTapScale(pageX, pageY)
+        smooth = true;
+        fireTapScale(pageX, pageY);
       } else {
-        fireDown(pageX, pageY)
+        fireDown(pageX, pageY);
       }
 
       lastTap = {
         time: now,
         x: pageX,
-        y: pageY,
-      }
+        y: pageY
+      };
     }
 
-    window.removeEventListener("touchmove", onTouchMove)
-    window.removeEventListener("touchend", onTouchEnd)
-    window.addEventListener("touchmove", onTouchMove)
-    window.addEventListener("touchend", onTouchEnd)
+    window.removeEventListener("touchmove", onTouchMove);
+    window.removeEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchmove", onTouchMove);
+    window.addEventListener("touchend", onTouchEnd);
   }
 
   function onTouchMove(e) {
     if (scale.scaling) {
-      const [touchA, touchB] = e.touches
-      fireScaleMove(touchA, touchB)
+      const [touchA, touchB] = e.touches;
+      fireScaleMove(touchA, touchB);
     } else {
-      fireMove(e.touches[0].pageX, e.touches[0].pageY)
+      fireMove(e.touches[0].pageX, e.touches[0].pageY);
     }
   }
 
   function onTouchEnd() {
-    fireUp()
-    window.removeEventListener("touchmove", onTouchMove)
-    window.removeEventListener("touchend", onTouchEnd)
-    window.removeEventListener("touchcancel", onTouchEnd)
+    fireUp();
+    window.removeEventListener("touchmove", onTouchMove);
+    window.removeEventListener("touchend", onTouchEnd);
+    window.removeEventListener("touchcancel", onTouchEnd);
   }
 
   function onMouseDown({ clientX, clientY }) {
-    if (touchScreen) return
-    fireDown(clientX, clientY)
+    if (touchScreen) return;
+    fireDown(clientX, clientY);
 
-    smooth = false
+    smooth = false;
 
-    window.addEventListener("mousemove", onMouseMove)
-    window.addEventListener("mouseup", onMouseUp)
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
   }
 
   function onMouseMove({ clientX, clientY }) {
-    fireMove(clientX, clientY)
+    fireMove(clientX, clientY);
   }
 
   function onMouseUp() {
-    window.removeEventListener("mousemove", onMouseMove)
-    fireUp()
+    window.removeEventListener("mousemove", onMouseMove);
+    fireUp();
   }
 
-  const mousedown = onMouseDown
-  const touchstart = onTouchStart
+  const mousedown = onMouseDown;
+  const touchstart = onTouchStart;
 </script>
 
 <img
-  {alt}
-  {src}
+  bind:this={img}
   class="c-svelteZoom"
   class:c-svelteZoom--contain={contain}
+  class:c-svelteZoom--hidden={contain === null}
   class:c-svelteZoom--no-contain={!contain}
   class:c-svelteZoom--transition={smooth}
   class:c-svelteZoom--visible={contain}
-  class:c-svelteZoom--hidden={contain === null}
   class:c-svelteZoom--willChange={willChange}
-  bind:this={img}
-  on:mousedown={mousedown}
-  on:touchstart={touchstart}
-  on:load={onLoad}
-  on:error={onError}
-  {...$$props}
+  {alt}
+  {src}
+  onmousedown={mousedown}
+  ontouchstart={touchstart}
+  onload={onLoad}
+  onerror={onError}
+  {...rest}
 />
 
 {#if !loaded}
   <div class="tw-absolute tw-inset-0 tw-flex tw-flex-grow tw-items-center tw-justify-center">
-    <slot {error}><span class="tw-text-white">...</span></slot>
+    {#if children}{@render children({ error })}{:else}<span class="tw-text-white">...</span>{/if}
   </div>
 {/if}
 

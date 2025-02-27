@@ -59,7 +59,6 @@ npm i svelte-zoom
 
 ```svelte
 <Zoom src="URL" alt="..." />
-
 ```
 
 ### Manual zooming
@@ -68,10 +67,11 @@ If for some reason you want to zoom in by calling the function manually. You can
 
 ```svelte
 <script>
-import Zoom from 'svelte-zoom'
+  import Zoom from "svelte-zoom";
 
-let zoom;
+  let zoom;
 </script>
+
 <Zoom src="..." alt="..." bind:this={zoom} />
 
 <button on:click={() => zoom.zoomIn()}>Zoom in</button>
